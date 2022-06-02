@@ -1,0 +1,4 @@
+{
+    "image": "centos:7",
+    "postCreateCommand": "yum install wget -y && wget -O /tmp/common-redhat.sh https://raw.githubusercontent.com/microsoft/vscode-dev-containers/main/script-library/common-redhat.sh && chmod +x /tmp/common-redhat.sh && /tmp/common-redhat.sh",
+}

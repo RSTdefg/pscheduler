@@ -52,7 +52,6 @@ SPEC_SCHEMA = {
             # If listed here, these parameters MUST be in the test spec.
             "required": [
                 "interface",
-		        "ssid",
             ],
             # Treat other properties as acceptable.  This should
             # ALWAYS be false.
