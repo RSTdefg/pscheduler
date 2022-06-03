@@ -31,7 +31,10 @@ except KeyError:
     pscheduler.fail('Missing data in input')
 
 # convert the comma separated ssids to a list
-ssid = list(ssid.split(','))
+if ssid is not '':
+    ssid = list(ssid.split(','))
+else:
+    ssid = []
 
 duration = input['test']['spec'].get('duration', 'PT5S')
 duration = pscheduler.timedelta_as_seconds( pscheduler.iso8601_as_timedelta(duration) ) 
