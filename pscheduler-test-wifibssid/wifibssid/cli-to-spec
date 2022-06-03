@@ -122,8 +122,10 @@ if options.duration is not None:
 if options.interface is not None:
    result['interface'] = options.interface
 
-#if options.ssid is not None:
+if options.ssid is not None:
    result['ssid'] = options.ssid
+else:
+   result['ssid'] = ""
 
 result['schema'] = schema.value()
 
