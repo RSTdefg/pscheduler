@@ -1,0 +1,12 @@
+update_config=1
+ctrl_interface=/var/run/wpa_supplicant
+network={
+  ssid="eduroam"
+  scan_ssid=1
+  key_mgmt=WPA-EAP
+  identity="kfliu@umich.edu"
+  password="KaifengliU235@umich"
+  eap=PEAP
+  phase1="peaplabel=0"
+  phase2="auth=MSCHAPV2"
+}
