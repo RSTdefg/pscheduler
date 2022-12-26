@@ -22,13 +22,7 @@ authenticated = False
 succeeded = False
 
 input = pscheduler.json_load(exit_on_error=True)
-diags.append(input)
 #parse the arguments
-#required: interface
-try:
-    interface = input['test']['spec']['interface']
-except KeyError:
-    pscheduler.fail('Missing the interface in input')
 
 #underscore username and password
 username = input['test']['spec'].get('_username', None)

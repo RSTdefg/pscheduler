@@ -26,13 +26,22 @@ from pscheduler import json_validate_from_standard_template
 SPEC_SCHEMA = {
     
     "local": {
-        
         # Define any local types used in the spec here
-        "TestImplementation": {
+        "Auth": {
             "type": "string",
-            "enum": [ "system", "api" ]
+            "properties": {
+                # The schema should always be constrained to a single
+                # value per version.
+                "identity":       { "$ref": "#/pScheduler/String" },
+                "password":       { "$ref": "#/pScheduler/String" },
+                "key_mgmt":       { "$ref": "#/pScheduler/String" },
+            },
+            "required": [
+                "identity",
+                "password",
+            ],
+            "additionalProperties": False
         },
-
     },
     
     "versions": {

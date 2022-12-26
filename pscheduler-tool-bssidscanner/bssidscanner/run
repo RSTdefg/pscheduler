@@ -1,127 +1,35 @@
-#!/usr/bin/env python3
-
-#
-# Development Order #5:
-#
-# This is the meat and bones of the tool, where the actual desired
-# commands or operation will be run. The results are then recorded
-# and added to the 'results' JSON data, which will then be sent
-# back to the test. Both system and api are able to be used here.
-#
-
-import time
-import datetime
-import threading
-from wpa_supplicant.core import WpaSupplicantDriver
-from twisted.internet.selectreactor import SelectReactor
 import pscheduler
 
-# from stdin
+import socket, os
+from datetime import datetime
+from time import sleep
+
+#temp file preserved between consecutive runs but not reboots
+WPA_CONFIG_PATH = '/tmp/wpa_supplicant/wpa_supplicant.conf'
+#initializes only wpa_supplicant starts
+WPA_CTRL_IFACE_BASE = '/var/run/wpa_supplicant'
+
+# parse config
 pscheduler_input = pscheduler.json_load(exit_on_error=True)
-
-# Take input from test spec
-try:
-    interface = pscheduler_input['test']['spec']['interface']
-except KeyError:
-    pscheduler.fail('Missing data in input')
-
-ssid_name = pscheduler_input['test']['spec'].get('ssid', None)
-
-# convert the comma separated ssids to a list
-if ssid_name:
-    ssid = list(ssid_name.split(','))
-else:
-    ssid = None
-
-duration = pscheduler_input['test']['spec'].get('duration', 'PT5S')
-duration = pscheduler.timedelta_as_seconds( pscheduler.iso8601_as_timedelta(duration) ) 
+get_ssid = pscheduler_input['test']['spec'].get('ssid', None)
+ssid_set = set(get_ssid.split(',')) if get_ssid else set()
+duration_iso = pscheduler_input['test']['spec'].get('duration', 'PT5S')
 timeout_iso = pscheduler_input['test']['spec'].get('timeout', 'PT10S')
-timeout = pscheduler.timedelta_as_seconds( pscheduler.iso8601_as_timedelta(timeout_iso) )
+timeout = pscheduler.timedelta_as_seconds(pscheduler.iso8601_as_timedelta(timeout_iso))
+duration = pscheduler.timedelta_as_seconds(pscheduler.iso8601_as_timedelta(duration_iso)) 
 start_time = datetime.datetime.now()
 succeeded = False
 error = ''
 diags = ''
-
-#802.11ax frequency to channel conversion
-def ieee80211_freq_khz_to_channel(freq):
-    if freq == 2484:
-        return 14
-    elif freq<2484 :
-        return int((freq - 2407) / 5)
-    elif freq >= 4910 and freq <= 4980:
-        return int((freq - 4000) / 5)
-    elif freq < 5925:
-        return int((freq - 5000) / 5)
-    elif freq == 5935:
-        return 2
-    elif freq <= 45000:
-        return int((freq - 5950) / 5)
-    elif freq >= 58320 and freq <= 70200:
-        return int((freq - 56160) / 2160)
-    else:
-        return 0  
-
-# Run the actual task here:
-def get_all_bssids(interface):
-    """
-    Scan the given interface for all bssids
-    Return a list of all bssids
-    """
-    reactor = SelectReactor()
-    t = threading.Thread(target=reactor.run, kwargs={'installSignalHandlers': 0})
-    t.daemon = True
-    t.start()
-    time.sleep(0.1)  # let reactor start
-    driver = WpaSupplicantDriver(reactor)
-    supplicant = driver.connect()
-
-    try:
-        interface = supplicant.create_interface(interface)
-    #interface already exists
-    except:
-        interface = supplicant.get_interface(interface)
-    cells = interface.scan(ssids=ssid, block=True)
-    
-    start_time = time.time()
-    wifi_list = []
-    for cell in cells:
-        bssid = {}
-        bssid['ssid'] = cell.get_ssid()
-        bssid['signal'] = cell.get_signal_quality()
-        bssid['address'] = cell.get_bssid()
-        bssid['frequency'] = cell.get_frequency()
-        bssid['quality'] = float(cell.get_signal_quality()) / float(100)
-        bssid['bitrates'] =  cell.get_rates()
-        bssid['encrypted'] = cell.get_privacy()
-        bssid['channel'] = ieee80211_freq_khz_to_channel(cell.get_frequency())  
-        bssid['mode'] = cell.get_mode()
-        wifi_list.append(bssid)
-    
-    reactor.disconnectAll()
-    reactor.sigTerm()
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    log_msg = "Scan finished in " + str(elapsed_time)
-    return wifi_list, elapsed_time
-
-"""
-Scan on the given interface
-Output a list of all bssids in json format with the given ssid
-"""
-all_bssids, elapsed_time = get_all_bssids(interface)
 ssid_list = []
 
-# Check complete list for matching ssids
-for bssid in all_bssids:
-    #if no ssids were given then append all the ssids
-    if not ssid:
-        ssid_list.append(bssid)
-    else:
-    #if ssid/ssids were given then only append those 
-        if bssid['ssid'] in ssid:
-            ssid_list.append(bssid)
-
-succeeded = True
+#check if interface already exists
+if not os.path.exists(WPA_CTRL_IFACE_BASE+'/'+interface):
+    #create config file and start wpa_supplicant
+    with open(WPA_CONFIG_PATH, 'w') as f:
+        f.write('ctrl_interface='+WPA_CTRL_IFACE_BASE+'\r\n')
+        f.write('update_config=1\r\n')
+    os.system('wpa_supplicant -B -i '+interface+' -c '+WPA_CONFIG_PATH)
 
 # IMPORTANT NOTE: This code puts the process to sleep until the
 # scheduled start time has arrived.  It should be placed after all
@@ -134,7 +42,29 @@ try:
 except KeyError:
     pscheduler.fail("Unable to find start time in input")
 
+# scanning via command line
+scan = ['sudo', 'wpa_cli', '-i', 'wlan0', 'scan']
+_, _, err = pscheduler.run_program(scan)
 
+#wait for scan to complete
+sleep(5)
+
+results = ['sudo', 'wpa_cli', '-i', 'wlan0', 'scan_results']
+_, output, err = pscheduler.run_program(results)
+
+result = [s.split('\t') for s in output.split('\n')][:-1]
+
+succeeded = True if len(result) > 1 else False
+
+for bssid, freq, signal, flags, ssid in result[1:]:
+    if not ssid_set or ssid in ssid_set:
+        ssid_list.append({
+            'ssid': ssid,
+            'bssid': bssid,
+            'freq': int(freq),
+            'signal': int(signal),
+            'flags': flags
+        })
 end_time = datetime.datetime.now()
 
 # Organize results into json data
@@ -142,13 +72,12 @@ results = {
     'succeeded': succeeded,
     'result': {
         'schema': 1,
-        'time': pscheduler.timedelta_as_iso8601( end_time - start_time),
+        'time': pscheduler.timedelta_as_iso8601(end_time - start_time),
         'succeeded': succeeded,
         'ssid_list': ssid_list
     },
     'error': error,
-    'diags': diags }
-
-
+    'diags': diags 
+}
 
 pscheduler.succeed_json(results)
