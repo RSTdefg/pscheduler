@@ -1,13 +1,16 @@
+import select
+from os import getpid, unlink, access, R_OK, listdir, path
+from socket import socket, AF_UNIX, SOCK_DGRAM
+import datetime
 import pscheduler
-
-import socket, os
-from datetime import datetime
-from time import sleep
 
 #temp file preserved between consecutive runs but not reboots
 WPA_CONFIG_PATH = '/tmp/wpa_supplicant/wpa_supplicant.conf'
-#initializes only wpa_supplicant starts
+#initializes only when wpa_supplicant starts
 WPA_CTRL_IFACE_BASE = '/var/run/wpa_supplicant'
+interface = 'wlan0'
+timeout = 3000
+ssid_set = set()
 
 # parse config
 pscheduler_input = pscheduler.json_load(exit_on_error=True)
@@ -24,39 +27,55 @@ diags = ''
 ssid_list = []
 
 #check if interface already exists
-if not os.path.exists(WPA_CTRL_IFACE_BASE+'/'+interface):
+if not access(f'{WPA_CTRL_IFACE_BASE}/{interface}', R_OK):
     #create config file and start wpa_supplicant
     with open(WPA_CONFIG_PATH, 'w') as f:
         f.write('ctrl_interface='+WPA_CTRL_IFACE_BASE+'\r\n')
         f.write('update_config=1\r\n')
     os.system('wpa_supplicant -B -i '+interface+' -c '+WPA_CONFIG_PATH)
 
-# IMPORTANT NOTE: This code puts the process to sleep until the
-# scheduled start time has arrived.  It should be placed after all
-# preparatory code has been executed and immediately before the tool
-# is invoked (for plugins that run other programs) or any activity
-# that does a measurement (for those that don't).
+#setting up socket
+sock = socket(AF_UNIX, SOCK_DGRAM)
+sock.settimeout(3)
+start  = datetime.datetime.now()
+# response will be written to this socket
+recv_sock = f"/tmp/wpa_ctrl_{getpid()}"
+sock.bind(recv_sock)
 
-try:
-    pscheduler.sleep_until(pscheduler_input['schedule']['start'])
-except KeyError:
-    pscheduler.fail("Unable to find start time in input")
+ctrl_interface = f"{WPA_CTRL_IFACE_BASE}/{interface}"
 
-# scanning via command line
-scan = ['sudo', 'wpa_cli', '-i', 'wlan0', 'scan']
-_, _, err = pscheduler.run_program(scan)
+sock.connect(ctrl_interface)
+print('start attaching at', datetime.datetime.now() - start)
+# attach to wpa_supplicant
+sock.send(b'ATTACH')
 
-#wait for scan to complete
-sleep(5)
+if sock.recv(3) != b'OK\n':
+    raise OSError(f"error attaching to {ctrl_interface}")
 
-results = ['sudo', 'wpa_cli', '-i', 'wlan0', 'scan_results']
-_, output, err = pscheduler.run_program(results)
+# start scan
+sock.send(bytes("SCAN", 'utf-8'))
+# polling for scan results
+poll = select.poll()
+poll.register(sock, select.POLLIN)
 
-result = [s.split('\t') for s in output.split('\n')][:-1]
+data = []
+# wait for scan to complete
+while poll.poll(timeout):
+    result = sock.recv(4096)
+    if result.endswith(b'<3>CTRL-EVENT-SCAN-RESULTS '):
+        sock.send(bytes("SCAN_RESULTS", 'utf-8'))
+        break
 
-succeeded = True if len(result) > 1 else False
+# gather scan results
+while poll.poll(200):
+    result = sock.recv(8192)
+    if result:
+        data.append(result)
 
-for bssid, freq, signal, flags, ssid in result[1:]:
+blob = data[1].decode('utf-8')
+result = [s.split('\t') for s in blob.split('\n')][1:-1]
+
+for bssid, freq, signal, flags, ssid in result:
     if not ssid_set or ssid in ssid_set:
         ssid_list.append({
             'ssid': ssid,
@@ -80,4 +99,6 @@ results = {
     'diags': diags 
 }
 
-pscheduler.succeed_json(results)
+# pscheduler.succeed_json(results)    
+print(results)
+print('finished at', datetime.datetime.now() - start)
