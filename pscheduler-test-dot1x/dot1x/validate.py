@@ -55,8 +55,6 @@ SPEC_SCHEMA = {
                 # The schema should always be constrained to a single
                 # value per version.
                 "schema":         { "type": "integer", "enum": [ 1 ] },
-                "host":           { "$ref": "#/pScheduler/Host" },
-                "host-node":      { "$ref": "#/pScheduler/Host" },
                 "timeout":        { "$ref": "#/pScheduler/Duration" },
                 "interface":      { "$ref": "#/pScheduler/String" },
                 "driver":         { "$ref": "#/pScheduler/String" },

@@ -53,55 +53,30 @@ opt_parser = pscheduler.FailingOptionParser(epilog=
 # documentation on the opt parser
 
 
-opt_parser.add_option("--host",
-                      help="Host to run the test.",
-                      action="store", type="string",
-                      dest="host")
-
-opt_parser.add_option("--host-node",
-                      help="Host to run the test.",
-                      action="store", type="string",
-                      dest="host_node")
-
 opt_parser.add_option("--timeout",
-                      help="Timeout for each query attempt",
+                      help="Timeout for authentication attempt",
                       action="store", type="string",
                       dest="timeout")
 
 opt_parser.add_option("--interface",
-                      help="Interface to use for scan (required)",
+                      help="Interface to use for scan",
                       action="store", type="string",
                       dest="interface")
 
-opt_parser.add_option("--username",
-                      help="Network login username",
-                      action="store", type="string",
-                      dest="username")
-
-opt_parser.add_option("--password",
-                      help="Network login password",
-                      action="store", type="string",
-                      dest="password")
-
-opt_parser.add_option("--driver",
-                      help="Wireless driver to use (defaults to system)",
-                      action="store", type="string",
-                      dest="driver")
-
 opt_parser.add_option("--ssid",
-                      help="Service set identifier (SSID) if using wireless",
+                      help="Service set identifier (SSID)",
                       action="store", type="string",
                       dest="ssid")
 
 opt_parser.add_option("--bssid",
-                      help="Basic service set identifier (BSSID) if using wireless",
+                      help="Basic service set identifier (BSSID)",
                       action="store", type="string",
                       dest="bssid")
 
-opt_parser.add_option("--key-management",
-                      help="WPA supplicant key managmenent (optional; 'NONE' for no password)",
+opt_parser.add_option("--auth",
+                      help="Auth object ('NONE' for public network, simple string for credential lookup)",
                       action="store", type="string",
-                      dest="key_management")
+                      dest="auth")
 
 
 
@@ -127,7 +102,7 @@ schema = pscheduler.HighInteger(1)
 # Build the test specification.  All we do here is build and set
 # schema levels.  Validation happens elsewhere.
 
-result = { }
+result = {}
 
 if options.host is not None:
    result['host'] = options.host
