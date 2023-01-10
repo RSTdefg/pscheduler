@@ -9,7 +9,7 @@
 # and results for this test are valid.
 #
 
-
+import json
 from pscheduler import json_validate_from_standard_template
 
 
@@ -22,13 +22,9 @@ from pscheduler import json_validate_from_standard_template
 # throughout pScheduler is defined in
 # pscheduler/python-pscheduler/pscheduler/pscheduler/jsonval.py.
 # Please use those where possible.
-
-SPEC_SCHEMA = {
-    
-    "local": {
-        # Define any local types used in the spec here
-        "Auth": {
-            "type": "string",
+AUTH_SCHEMA =     {
+        
+        "type": "object",
             "properties": {
                 # The schema should always be constrained to a single
                 # value per version.
@@ -36,14 +32,17 @@ SPEC_SCHEMA = {
                 "password":       { "$ref": "#/pScheduler/String" },
                 "key_mgmt":       { "$ref": "#/pScheduler/String" },
             },
-            "required": [
-                "identity",
-                "password",
+        "required": [
+            "identity",
+            "password"
             ],
-            "additionalProperties": False
-        },
-    },
-    
+             "additionalProperties": False
+
+        }
+
+
+SPEC_SCHEMA = {
+        
     "versions": {
         
         # Initial version of the specification
@@ -56,18 +55,14 @@ SPEC_SCHEMA = {
                 # value per version.
                 "schema":         { "type": "integer", "enum": [ 1 ] },
                 "timeout":        { "$ref": "#/pScheduler/Duration" },
-                "interface":      { "$ref": "#/pScheduler/String" },
-                "driver":         { "$ref": "#/pScheduler/String" },
-                "_username":      { "$ref": "#/pScheduler/String" },
-                "_password":        { "$ref": "#/pScheduler/String" },
+                "auth":           { "$ref": "#/pScheduler/String" },
                 "ssid":           { "$ref": "#/pScheduler/String" },
                 "bssid":          { "$ref": "#/pScheduler/String" },
-                "key-management": { "$ref": "#/pScheduler/String" },
-
+                "interface":      { "$ref": "#/pScheduler/String" },
             },
             # If listed here, these parameters MUST be in the test spec.
             "required": [
-                "interface",
+                
             ],
             # Treat other properties as acceptable.  This should
             # ALWAYS be false.
@@ -95,12 +90,12 @@ SPEC_SCHEMA = {
 
 
 def spec_is_valid(json):
-
+    #check for general spec validity
     (valid, errors) = json_validate_from_standard_template(json, SPEC_SCHEMA)
 
     if not valid:
         return (valid, errors)
-
+    
     # If there are semantic relationships that can't be expressed the
     # JSON Schema (e.g., parameter X can't be less then 5 when
     # parameter Y is an odd number), evaluate them here and complain
@@ -108,9 +103,29 @@ def spec_is_valid(json):
     #
     #if some_condition_which_is_an_error
     #    return(False, "...Error Message...")
+    
+    if 'ssid' not in json and 'bssid' not in json:
+        return (False, "Either ssid or bssid must be specified")
+    #check for auth validity
+    if 'auth' in json:
+        try:
+            auth = json.loads(json['auth'])
+        except ValueError:
+            #try loading credentials from file
+            try:
+                with open('/etc/pscheduler/tool/dot1x_credentials.conf') as f:
+                    auth = json.load(f)
+            except FileNotFoundError:
+                return (False, "Unable to load auth from file")
+            except ValueError:
+                return (False, "not a valid json file")
+
+        (auth_valid, errors) = json_validate_from_standard_template(auth, AUTH_SCHEMA)
+        if not auth_valid:
+            return (False, "auth is not valid")
 
     # By this point, everything is okay.
-    return (valid, errors)
+    return (True, "Valid")
 
 
 

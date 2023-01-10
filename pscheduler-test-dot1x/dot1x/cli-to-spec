@@ -104,35 +104,20 @@ schema = pscheduler.HighInteger(1)
 
 result = {}
 
-if options.host is not None:
-   result['host'] = options.host
-
-if options.host_node is not None:
-   result['host-node'] = options.host_node
-
 if options.timeout is not None:
    result['timeout'] = options.timeout
 
 if options.interface is not None:
    result['interface'] = options.interface
 
-if options.driver is not None:
-   result['driver'] = options.driver
-
 if options.username is not None:
-   result['_username'] = options.username
-
-if options.password is not None:
-   result['_password'] = options.password
+   result['auth'] = options.auth
 
 if options.ssid is not None:
    result['ssid'] = options.ssid
 
 if options.bssid is not None:
    result['bssid'] = options.bssid
-
-if options.key_management is not None:
-   result['key-management'] = options.key_management
 
 
 result['schema'] = schema.value()
